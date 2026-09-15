@@ -12,6 +12,7 @@ import java.util.PriorityQueue;
 public class SimuladorFilasTandemM6 {
     private static final int LIMITE_ALEATORIOS = 100_000;
     private static final double PRIMEIRA_CHEGADA = 2.5;
+    private static final double PROBABILIDADE_FILA1_PARA_FILA2 = 1.0;
 
     /*
      * Evolucao do gerador desenvolvido pelo grupo no M2.
@@ -56,10 +57,15 @@ public class SimuladorFilasTandemM6 {
                     throw new IllegalStateException("Tipo de evento desconhecido");
             }
         }
+
+        validarResultado();
     }
 
     private void acumulaTempo(double tempoDoEvento) {
         double delta = tempoDoEvento - tempoGlobal;
+        if (delta < 0.0) {
+            throw new IllegalStateException("Evento processado fora da ordem cronologica");
+        }
         fila1.acumula(delta);
         fila2.acumula(delta);
     }
@@ -104,11 +110,31 @@ public class SimuladorFilasTandemM6 {
     }
 
     private void agenda(TipoEvento tipo, double intervalo) {
+        if (intervalo < 0.0) {
+            throw new IllegalArgumentException("O intervalo do evento nao pode ser negativo");
+        }
         escalonador.add(new Evento(tempoGlobal + intervalo, tipo));
+    }
+
+    private void validarResultado() {
+        if (gerador.quantidadeGerada != LIMITE_ALEATORIOS) {
+            throw new IllegalStateException(
+                    "A simulacao terminou sem utilizar exatamente 100.000 aleatorios");
+        }
+        fila1.validaTempos(tempoGlobal);
+        fila2.validaTempos(tempoGlobal);
     }
 
     public void mostraResultados() {
         System.out.println("SIMULACAO DE DUAS FILAS EM TANDEM");
+        System.out.println("Fila 1: G/G/2/3 | chegadas U(1,5) | atendimento U(4,5)");
+        System.out.println("Fila 2: G/G/1/5 | sem chegadas externas | atendimento U(1,3)");
+        System.out.printf("Primeira chegada: %.1f%n", PRIMEIRA_CHEGADA);
+        System.out.printf("Roteamento Fila 1 -> Fila 2: %.0f%%%n",
+                PROBABILIDADE_FILA1_PARA_FILA2 * 100.0);
+        System.out.println("Gerador: congruente linear de 48 bits");
+        System.out.println("Semente: " + SEMENTE);
+        System.out.println("Modulo: 2^48 (" + M + ")");
         System.out.println("Aleatorios utilizados: " + gerador.quantidadeGerada);
         System.out.printf("Tempo global: %.6f%n%n", tempoGlobal);
         fila1.mostraResultados(tempoGlobal);
@@ -124,6 +150,7 @@ public class SimuladorFilasTandemM6 {
 }
 
 enum TipoEvento {
+    // Em caso de empate, a ordem define a prioridade de processamento.
     SAIDA, PASSAGEM, CHEGADA
 }
 
@@ -160,6 +187,16 @@ class Fila {
     Fila(String nome, int servidores, int capacidade,
          double chegadaMinima, double chegadaMaxima,
          double atendimentoMinimo, double atendimentoMaximo) {
+        if (servidores <= 0) {
+            throw new IllegalArgumentException("A fila deve possuir pelo menos um servidor");
+        }
+        if (capacidade < servidores) {
+            throw new IllegalArgumentException(
+                    "A capacidade nao pode ser menor que o numero de servidores");
+        }
+        if (chegadaMinima > chegadaMaxima || atendimentoMinimo > atendimentoMaximo) {
+            throw new IllegalArgumentException("Intervalo uniforme invalido");
+        }
         this.nome = nome;
         this.servidores = servidores;
         this.capacidade = capacidade;
@@ -171,10 +208,43 @@ class Fila {
     }
 
     boolean temEspaco() { return clientes < capacidade; }
-    void entra() { clientes++; }
-    void sai() { clientes--; }
+    void entra() {
+        if (!temEspaco()) {
+            throw new IllegalStateException(nome + " ultrapassou sua capacidade");
+        }
+        clientes++;
+    }
+    void sai() {
+        if (clientes <= 0) {
+            throw new IllegalStateException(nome + " nao possui cliente para sair");
+        }
+        clientes--;
+    }
     void perde() { perdas++; }
-    void acumula(double delta) { tempos[clientes] += delta; }
+    void acumula(double delta) {
+        if (delta < 0.0) {
+            throw new IllegalArgumentException("Tempo acumulado nao pode ser negativo");
+        }
+        if (clientes < 0 || clientes > capacidade) {
+            throw new IllegalStateException(nome + " esta em um estado invalido");
+        }
+        tempos[clientes] += delta;
+    }
+
+    void validaTempos(double tempoGlobal) {
+        double soma = 0.0;
+        for (double tempo : tempos) {
+            if (tempo < 0.0) {
+                throw new IllegalStateException(nome + " possui tempo acumulado negativo");
+            }
+            soma += tempo;
+        }
+        double tolerancia = Math.max(1.0, tempoGlobal) * 1.0e-9;
+        if (Math.abs(soma - tempoGlobal) > tolerancia) {
+            throw new IllegalStateException(
+                    "Os tempos acumulados de " + nome + " nao correspondem ao tempo global");
+        }
+    }
 
     double geraChegada(GeradorCongruenteLinear gerador) {
         return uniforme(chegadaMinima, chegadaMaxima, gerador.proximo());
