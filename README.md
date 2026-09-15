@@ -24,6 +24,8 @@ A primeira fila possui configuração `G/G/2/3`:
 
 A capacidade inclui os clientes em atendimento e os clientes esperando. Portanto, quando a fila possui três clientes, dois estão sendo atendidos e um está esperando.
 
+Nos resultados, o estado de uma fila representa sua quantidade total de clientes naquele instante, incluindo quem está em atendimento e quem está esperando.
+
 ### Fila 2
 
 A segunda fila possui configuração `G/G/1/5`:
@@ -191,12 +193,32 @@ probabilidade do estado = tempo acumulado no estado / tempo global
 
 A soma das probabilidades de cada fila deve resultar em 100%.
 
+## Validações internas
+
+Para facilitar a identificação de erros durante os testes, o simulador verifica automaticamente se:
+
+- foram utilizados exatamente 100.000 números pseudoaleatórios;
+- nenhum evento foi processado antes do evento anterior;
+- nenhuma fila ficou com quantidade negativa de clientes;
+- nenhuma fila ultrapassou sua capacidade;
+- nenhum tempo negativo foi acumulado;
+- a soma dos tempos dos estados de cada fila corresponde ao tempo global.
+
+Se alguma dessas condições não for satisfeita, o programa encerra a execução apresentando uma mensagem de erro. Essas verificações não alteram o processo de simulação nem os resultados; elas apenas conferem sua consistência.
+
 ## Resultado obtido
 
 Com a semente e os parâmetros definidos no código, a execução produz:
 
 ```text
 SIMULACAO DE DUAS FILAS EM TANDEM
+Fila 1: G/G/2/3 | chegadas U(1,5) | atendimento U(4,5)
+Fila 2: G/G/1/5 | sem chegadas externas | atendimento U(1,3)
+Primeira chegada: 2.5
+Roteamento Fila 1 -> Fila 2: 100%
+Gerador: congruente linear de 48 bits
+Semente: 13213
+Modulo: 2^48 (281474976710656)
 Aleatorios utilizados: 100000
 Tempo global: 100839.824935
 
